@@ -1,10 +1,10 @@
 # CloudVM Manager backend
 
-This is a standalone Spring Boot 3 / Java 17 API. It stores and reports VM metadata only; **it does not provision, start, stop, or operate real hypervisors**. Set up MySQL 8.0.16 or later and execute the workspace-root `cloudvm_manager.sql` once before starting the application. Hibernate is configured with `spring.jpa.hibernate.ddl-auto=validate`; schema changes belong in reviewed SQL migrations.
+This is a standalone Spring Boot 3 / Java 17 API. It stores and reports VM metadata only; **it does not provision, start, stop, or operate real hypervisors**. The default MySQL profile requires MySQL 8.0.16 or later and the workspace-root `cloudvm_manager.sql` schema. Hibernate is configured with `spring.jpa.hibernate.ddl-auto=validate`; schema changes belong in reviewed SQL migrations.
 
 ## Configure and run
 
-Required environment variables:
+Required environment variables for the default MySQL profile:
 
 - `DB_URL`: JDBC URL for the `cloudvm_manager` database.
 - `DB_USERNAME` and `DB_PASSWORD`: database credentials.
@@ -12,13 +12,15 @@ Required environment variables:
 
 Optional: `PORT` (8080), `JWT_TTL_SECONDS` (3600), and `CORS_ALLOWED_ORIGINS` (defaults to `http://localhost:5173`, comma-separated exact origins). Same-origin reverse-proxy deployment is also supported. No DB or JWT secret values are checked in.
 
+For a disposable demo without an external database, set `APP_PROFILE=memory` and provide `JWT_SECRET`. This profile uses an H2 in-memory database and creates its schema at startup. All records disappear when the application stops or restarts, and multiple instances do not share data. Do not use it for persistent or production data. The MySQL profile remains the default.
+
 `backend/.env.example` contains safe placeholders; copy it to `.env`, replace each placeholder locally, and export the values into the process environment before running. Spring Boot does **not** load `.env` automatically. In PowerShell, from the backend directory, a local `.env` can be loaded into the current process with:
 
 ```powershell
 Get-Content .env | Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' } | ForEach-Object { $name, $value = $_ -split '=', 2; Set-Item -Path "Env:$name" -Value $value }
 ```
 
-Run `.\mvnw.cmd test` and `.\mvnw.cmd spring-boot:run` from that same PowerShell session. The checked-in Maven Wrapper downloads the pinned Maven distribution to the user's wrapper cache and does not install Maven globally; wrapper/Maven artifact downloads require access to Maven Central. The project is not wired to the frontend; the frontend can point its API base URL to this service through its own configuration.
+Run `.\mvnw.cmd test` and `.\mvnw.cmd spring-boot:run` from that same PowerShell session. The checked-in Maven Wrapper downloads the pinned Maven distribution to the user's wrapper cache and does not install Maven globally; wrapper/Maven artifact downloads require access to Maven Central. For production, the root Dockerfile bundles the frontend into this service, where it and the API share one origin. See the workspace-root README for the Render deployment procedure.
 
 ## JSON/API contract
 

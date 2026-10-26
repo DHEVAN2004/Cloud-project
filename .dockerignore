@@ -1,0 +1,15 @@
+.git
+.github
+.vscode
+node_modules
+dist
+coverage
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.env
+.env.*
+!.env.example
+backend/target
+backend/.env
+backend/.env.*

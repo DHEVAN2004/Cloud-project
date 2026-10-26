@@ -48,11 +48,72 @@ If Maven is installed globally instead, use `mvn spring-boot:run`. The API liste
 In a second PowerShell window, from the project root:
 
 ```powershell
-npm install
+npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. Vite proxies `/api` requests to the Spring Boot service at port 8080. Frontend API URL and proxy settings can be adjusted in `.env` using the safe, non-secret values shown in `.env.example`. Restart Vite after changing its environment or proxy settings.
+Open `http://localhost:5173`. Vite proxies `/api` requests to the Spring Boot service at port 8080. For local development, configure the proxy with `VITE_DEV_API_PROXY` and, if needed, the API base URL with `VITE_API_BASE_URL` in `.env`; production builds always use same-origin `/api` paths. Restart Vite after changing local environment or proxy settings.
+
+## Deploy the combined application to Render
+
+The root `Dockerfile` builds the existing Vite application, copies its `dist` files into Spring Boot's static resources, and packages both into one Java 17 executable. Deploy it as one Render **Web Service**; there is no separate frontend/backend service, GitHub Actions workflow, or image registry. Spring serves the React app and REST API from the same origin. Direct React Router visits are forwarded to `index.html`; `/api/**` remains API-only.
+
+The default deployment mode uses a reachable MySQL-compatible database. For a no-external-database demo, select the `memory` profile, which uses H2 in-memory storage. In that mode, accounts, VM records, alerts, and settings are lost whenever Render restarts or replaces the instance; multiple instances do not share data. Use it only for disposable demos. The default MySQL mode continues to validate the existing schema and does not create or drop production tables.
+
+### Render environment variables
+
+For a temporary in-memory deployment, add these under the Web Service's **Environment** settings:
+
+| Key | Value |
+|---|---|
+| `APP_PROFILE` | `memory` |
+| `JWT_SECRET` | Base64-encoded secret with at least 32 random decoded bytes |
+
+Do not set `DB_URL`, `DB_USERNAME`, or `DB_PASSWORD` in memory mode. Render supplies `PORT` automatically. To switch to persistent MySQL later, remove `APP_PROFILE=memory`, configure the variables below, and apply the reviewed root `cloudvm_manager.sql` schema to your database.
+
+For persistent MySQL-compatible storage, configure:
+
+| Key | Value |
+|---|---|
+| `DB_URL` | `jdbc:mysql://<database-host>:3306/cloudvm_manager?sslMode=REQUIRED&serverTimezone=UTC` |
+| `DB_USERNAME` | Database user with privileges only on the application database |
+| `DB_PASSWORD` | That database user's password |
+| `JWT_SECRET` | Base64-encoded secret with at least 32 random decoded bytes |
+
+Generate a JWT secret locally in PowerShell with:
+
+```powershell
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$bytes = New-Object byte[] 32
+$rng.GetBytes($bytes)
+[Convert]::ToBase64String($bytes)
+$rng.Dispose()
+```
+
+Copy the generated value into Render's secret environment variable; do not put it in source control, Docker build arguments, or frontend variables. Render supplies `PORT` automatically. Optional `JWT_TTL_SECONDS` defaults to `3600`. `CORS_ALLOWED_ORIGINS` is only needed for additional cross-origin clients; the React application uses same-origin API requests and does not need it.
+
+### Render setup
+
+1. In Render, choose **New + → Web Service** and connect `DHEVAN2004/Cloud-project`.
+2. Select the branch to deploy and set **Root Directory** to the repository root (leave it blank).
+3. Set **Runtime** to **Docker** and **Dockerfile Path** to `./Dockerfile`. Do not configure a separate build or start command; Render builds and runs the root Dockerfile.
+4. Add `APP_PROFILE=memory` and a generated `JWT_SECRET` for a disposable in-memory demo, or configure the MySQL variables above for persistent storage. Do not add a second web service for the UI or API.
+5. Set **Health Check Path** to `/actuator/health`.
+6. Deploy. Open the single public URL Render assigns: `/` serves the UI and `/api/...` serves the existing backend endpoints.
+
+### Test the combined Docker image locally
+
+Run these commands from the repository root to build and run the combined image in temporary memory mode:
+
+```powershell
+docker build -t cloudvm-manager .
+docker run --rm -p 8080:8080 `
+  -e "APP_PROFILE=memory" `
+  -e "JWT_SECRET=$env:JWT_SECRET" `
+  cloudvm-manager
+```
+
+In another terminal, verify `Invoke-RestMethod http://localhost:8080/actuator/health` reports `UP`, and open `http://localhost:8080/login`. Protected `/api/**` endpoints still require a bearer token. To run the non-containerized checks, use `npm ci; npm run build` from the root and `.\mvnw.cmd test` from `backend`.
 
 ## Use and test the API
 

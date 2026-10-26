@@ -7,6 +7,9 @@ import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +22,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    private static final Logger logger = LoggerFactory.getLogger(ApiExceptionHandler.class);
+
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ApiError> api(ApiException e, HttpServletRequest request) { return response(e.getStatus(), e.getMessage(), request, null); }
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -31,6 +36,11 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiError> malformed(Exception e, HttpServletRequest request) { return response(HttpStatus.BAD_REQUEST, "Malformed or invalid request", request, null); }
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> conflict(DataIntegrityViolationException e, HttpServletRequest request) { return response(HttpStatus.CONFLICT, "The request conflicts with existing data", request, null); }
+    @ExceptionHandler(DataAccessException.class)
+    ResponseEntity<ApiError> databaseUnavailable(DataAccessException e, HttpServletRequest request) {
+        logger.error("Database operation failed for {}", request.getRequestURI(), e);
+        return response(HttpStatus.SERVICE_UNAVAILABLE, "The database is unavailable; the request was not completed", request, null);
+    }
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiError> unexpected(Exception e, HttpServletRequest request) { return response(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected server error occurred", request, null); }
     private ResponseEntity<ApiError> response(HttpStatus status, String message, HttpServletRequest request, Object details) {
